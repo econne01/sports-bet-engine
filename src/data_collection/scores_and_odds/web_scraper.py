@@ -1,6 +1,6 @@
-import re
-from bs4 import BeautifulSoup
+import datetime
 import requests
+from bs4 import BeautifulSoup
 
 money_line_cols = [
     'date',
@@ -31,6 +31,9 @@ ou_line_cols = [
     'total_runs_final',
 ]
 
+def daterange(d1, d2):
+    return (d1 + datetime.timedelta(days=i) for i in range((d2 - d1).days + 1))
+
 def parse_money_line_odds(odds):
     """ Read a money line odds string and return it as (favorite_odds, underdog_odds) tuple 
 
@@ -52,19 +55,33 @@ def parse_game_data_rows(date, time_row, away_team_row, home_team_row):
 
     home_tds = home_team_row.find_all('td')
     away_tds = away_team_row.find_all('td')
+
+    # FINAL SCORE
+    game_details['home_final'] = home_tds[6].find('span').string
+    game_details['away_final'] = away_tds[6].find('span').string
+    if game_details['home_final'] is None or game_details['away_final'] is None:
+        # Game was postponed... so we don't care about this game. Just return None
+        return None
+    else:
+        game_details['total_runs_final'] = str(int(game_details['home_final']) + int(game_details['away_final']))
+
     # TEAM NAME
     game_details['home_team_name'] = home_tds[0].find('a').string
     game_details['away_team_name'] = away_tds[0].find('a').string
     # TEAM PITCHER, eg '(r) arrieta, j'
-    home_pitcher = re.match(r"\((?P<handedness>[r,l])\) (?P<name>.*)", home_tds[1].string).groupdict()
-    away_pitcher = re.match(r"\((?P<handedness>[r,l])\) (?P<name>.*)", away_tds[1].string).groupdict()
+    home_pitcher = home_tds[1].string
+    away_pitcher = away_tds[1].string
 
-    game_details['home_pitcher'] = home_pitcher['name']
-    game_details['home_pitcher_handedness'] = home_pitcher['handedness']
-    game_details['away_pitcher'] = away_pitcher['name']
-    game_details['away_pitcher_handedness'] = away_pitcher['handedness']
+    game_details['home_pitcher'] = home_pitcher[3:]
+    game_details['home_pitcher_handedness'] = home_pitcher[1:2]
+    game_details['away_pitcher'] = away_pitcher[3:]
+    game_details['away_pitcher_handedness'] = away_pitcher[1:2]
 
     # ODDS (either Money Line favorite, eg '-120', or O/U, eg '9u20')
+    if home_tds[2].string is None:
+        print(date)
+        print(home_tds)
+
     if home_tds[2].string[0] == '-':
         # This is the Money Line and HOME team is open favorite
         fav_underdog = parse_money_line_odds(home_tds[2].string)
@@ -114,34 +131,25 @@ def parse_game_data_rows(date, time_row, away_team_row, home_team_row):
     game_details['home_run_line'] = home_tds[5].string
     game_details['away_run_line'] = away_tds[5].string
 
-    # FINAL SCORE
-    game_details['home_final'] = home_tds[6].find('span').string
-    game_details['away_final'] = away_tds[6].find('span').string
-    if game_details['home_final'] is None or game_details['away_final'] is None:
-        # Game was postponed... so we don't care about this game. Just return None
-        return None
-    else:
-        game_details['total_runs_final'] = str(int(game_details['home_final']) + int(game_details['away_final']))
-
     return game_details
 
-def print_money_line_odds(game_details):
+def get_money_line_odds(game_details):
     """
     Print information for Money Line details of a game
     """
-    print('\t'.join([game_details[col] for col in money_line_cols]))
+    return '\t'.join([game_details[col] or '' for col in money_line_cols])
 
-def print_run_line_odds(game_details):
+def get_run_line_odds(game_details):
     """
     Print information for Run Line details of a game
     """
-    print('\t'.join([game_details[col] for col in run_line_cols]))
+    return '\t'.join([game_details[col] or '' for col in run_line_cols])
 
-def print_over_under_odds(game_details):
+def get_over_under_odds(game_details):
     """
     Print information for Over/Under details of a game
     """
-    print('\t'.join([game_details[col] for col in ou_line_cols]))
+    return '\t'.join([game_details[col] or '' for col in ou_line_cols])
 
 
 def scrape_data_for_date(date):
@@ -174,24 +182,30 @@ def scrape_data_for_date(date):
 if __name__ == '__main__':
     print('Begin scraping scoresAndOdds.com')
     game_details_list = []
-    for date in ['2018-06-01', '2018-06-02', '2018-06-03']:
+    for d in daterange(datetime.date(2018, 03, 30), datetime.date(2018, 07, 15)):
+        date = d.strftime('%Y-%m-%d')
+        if date[-2:] == '01':
+            print date
         game_details_list.extend(scrape_data_for_date(date))
 
     # Money Line results
-    print('\t'.join([col.upper() for col in money_line_cols]))
-    for game_details in game_details_list:
-        print_money_line_odds(game_details)
-    print('\n')
+    with open('money_line_history.txt', 'w') as datafile:
+        datafile.write('\t'.join([col.upper() for col in money_line_cols]))
+        for game_details in game_details_list:
+            datafile.write(get_money_line_odds(game_details))
+        datafile.write('\n')
 
     # Run Line results
-    print('\t'.join([col.upper() for col in run_line_cols]))
-    for game_details in game_details_list:
-        print_run_line_odds(game_details)
-    print('\n')
+    with open('run_line_history.txt', 'w') as datafile:
+        datafile.write('\t'.join([col.upper() for col in run_line_cols]))
+        for game_details in game_details_list:
+            datafile.write(get_run_line_odds(game_details))
+        datafile.write('\n')
 
     # O/U Line results
-    print('\t'.join([col.upper() for col in ou_line_cols]))
-    for game_details in game_details_list:
-        print_over_under_odds(game_details)
-    print('\n')
+    with open('ou_line_history.txt', 'w') as datafile:
+        datafile.write('\t'.join([col.upper() for col in ou_line_cols]))
+        for game_details in game_details_list:
+            datafile.write(get_over_under_odds(game_details))
+        datafile.write('\n')
     print('Complete')
