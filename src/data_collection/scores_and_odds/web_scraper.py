@@ -192,20 +192,20 @@ if __name__ == '__main__':
     with open('money_line_history.txt', 'w') as datafile:
         datafile.write('\t'.join([col.upper() for col in money_line_cols]))
         for game_details in game_details_list:
-            datafile.write(get_money_line_odds(game_details))
+            datafile.write(get_money_line_odds(game_details) + '\n')
         datafile.write('\n')
 
     # Run Line results
     with open('run_line_history.txt', 'w') as datafile:
         datafile.write('\t'.join([col.upper() for col in run_line_cols]))
         for game_details in game_details_list:
-            datafile.write(get_run_line_odds(game_details))
+            datafile.write(get_run_line_odds(game_details) + '\n')
         datafile.write('\n')
 
     # O/U Line results
     with open('ou_line_history.txt', 'w') as datafile:
         datafile.write('\t'.join([col.upper() for col in ou_line_cols]))
         for game_details in game_details_list:
-            datafile.write(get_over_under_odds(game_details))
+            datafile.write(get_over_under_odds(game_details) + '\n')
         datafile.write('\n')
     print('Complete')
